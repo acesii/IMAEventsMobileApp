@@ -16,26 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
+
+
 var app = {
     // App DB Connection
     db: null,
+    errorCB: function(err) {
+      alert("Error processing SQL: "+err.code+" "+err.message);
+    },
+    successCB: function() {
+    },
     // Application Constructor
     initialize: function() {
         this.bindEvents();
-
-        // Open a database connection and store it at the app level
-        this.db = window.openDatabase("Database", "1.0", "PhoneGap Demo", 200000);
-
-        // Create a new transaction, and invoke the "updateEventsData" method defined under "app"
-        this.db.transaction(this.updateEventsData,
-                            function(err) {
-                              // Error Callback
-                              alert("Error "+err);
-                            },
-                            function() {
-                              // Success Callback
-                              alert("OK");
-                            });
     },
     // Bind Event Listeners
     //
@@ -50,6 +44,12 @@ var app = {
     // function, we must explicity call 'app.receivedEvent(...);'
     onDeviceReady: function() {
         app.receivedEvent('deviceready');
+
+        // Open a database connection and store it at the app level
+        app.db = openDatabase("evtdb", "1.0", "Event Database", 200000);
+
+        // Create a new transaction, and invoke the "updateEventsData" method defined under "app"
+        app.db.transaction(app.updateEventsData, app.errorCB, app.successCB);
     },
     // Update DOM on a Received Event
     receivedEvent: function(id) {
@@ -62,32 +62,54 @@ var app = {
 
         console.log('Received Event: ' + id);
     },
-    updateEventsData: function(tx) {
+    updateEventsData: function(db_tx) {
 
       // Get highest timestamp or 0 if not yet stored
       var highest_timestamp_seen = window.localStorage.getItem("maxTS") || 0;
 
+      alert("Starting with highest timestamp:"+highest_timestamp_seen);
       // Get or create our events table - list of events
-      tx.executeSql('CREATE TABLE IF NOT EXISTS EVENT ( id unique, name, event_date, address )');
+      alert("Create");
+      db_tx.executeSql('DROP TABLE IF EXISTS EVT', [], app.successCB, app.errorCB);
+      db_tx.executeSql('CREATE TABLE IF NOT EXISTS EVT ( name , eventdate , address)', [], app.successCB, app.errorCB);
+      db_tx.executeSql('INSERT INTO EVT (name,eventdate,address) VALUES ("a","b","c")', [], app.successCB, app.errorCB);
+
+      alert("Create done looking for events since "+highest_timestamp_seen);
 
       // Now fetch the latest data
-      $.getJSON ("http://localhost:8080/IMAEventsServer/UpcomingEvents/list/Sheffield?addedSince="+highest_timestamp_seen,
-        function (data) {
-          for (index = 0; index < data.events.length; ++index) {
-            tx.executeSql('INSERT INTO EVENT(name,event_date,address) VALUES ("'+
-                                      data.events[index].name+'","'+
-                                      data.events[index].eventDate+'","'+
-                                      data.events[index].address+'")');
-            alert("Added "+data.events[index]);
+      $.ajax ({url:"http://localhost:8080/IMAEventsServer/UpcomingEvents/list/Sheffield?addedSince="+highest_timestamp_seen,
+               dataType:"jsonp",
+               async : false,
+               success:function (data, textstatus, jqXHR) {
+                         console.log("Processing %o",data);
+                         for (index = 0; index < data.events.length; ++index) {
 
-            // Update our cursor if needed
-            if ( data.events[index].dateAdded > highest_timestamp_seen )
-              highest_timestamp_seen = data.events[index].dateAdded
-          }
-        }
-      );
+                           // Hand off to a special add event functon. Reusing the db_tx from above results in errors.
+                           app.addEvent(db_tx,data.events[index].name,data.events[index].eventDate,data.events[index].address);
 
-      // Store the highest timestamp seen
-      window.localStorage.setItem("maxTS",highest_timestamp_seen);
+                           // Update our cursor if needed
+                           if ( data.events[index].dateAdded > highest_timestamp_seen ) {
+                             highest_timestamp_seen = data.events[index].dateAdded
+                             alert("update to "+data.events[index].dateAdded);
+                           }
+                         }
+
+                         // Store the highest timestamp seen
+                         alert("update highest timestamp to "+highest_timestamp_seen);
+                         window.localStorage.setItem("maxTS",highest_timestamp_seen);
+                         alert("updateEventsData complete");
+                       }
+     
+      });
+
+    },
+    addEvent: function(name, eventdate, address) {
+      var ins_stmt = 'INSERT INTO EVT (name,eventdate,address) VALUES ("'+name+'","'+eventdate+'","'+address+'")';
+      alert("Inserting "+ins_stmt);
+      app.db.transaction( function(db_tx) {
+                                       db_tx.executeSql(ins_stmt);
+                                     },
+                          app.errorCB, 
+                          app.successCB);
     }
 };
