@@ -22,9 +22,11 @@
 var app = {
     // App DB Connection
     db: null,
+    // A reusable error callback
     errorCB: function(err) {
       alert("Error processing SQL: "+err.code+" "+err.message);
     },
+    // reusable success callback which does nothing. In debugging we might put an alert or console.log in here
     successCB: function() {
     },
     // Application Constructor
