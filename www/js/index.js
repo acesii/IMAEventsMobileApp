@@ -64,37 +64,30 @@ var app = {
     },
     updateEventsData: function(tx) {
 
-      var highest_timestamp_seen = 0;
-
-      // Get or create our status table - this will record the highest timestamp we have seen so far
-      tx.executeSql('CREATE TABLE IF NOT EXISTS WS_FETCH_CURSOR ( id unique, name, highest_ts )');
+      // Get highest timestamp or 0 if not yet stored
+      var highest_timestamp_seen = window.localStorage.getItem("maxTS") || 0;
 
       // Get or create our events table - list of events
       tx.executeSql('CREATE TABLE IF NOT EXISTS EVENT ( id unique, name, event_date, address )');
-
-      // Having made sure all the tables exist, see if we have any cursor entries for tracking where we are up
-      // to in downloading event data.
-      tx.executeSql('SELECT * FROM WS_FETCH_CURSOR where name = "events"', [], 
-                    function(tx, results) {
-                      if ( results.rows.length == 0 ) {
-                        // No matching rows - First time we have run this routine - Set up the tracking row
-                        tx.executeSql('INSERT INTO WS_FETCH_CURSOR(name, highest_ts) VALUES ("events",0)');
-                      }
-                      else {
-                        // Run previously - Extract the max timestamp and use it
-                        highest_timestamp_seen = results.rows.item(0).highest_ts
-                      }
-                    }, 
-                    function(err) {
-                      alert("Problem getting highest timestamp : "+err);
-                    });
 
       // Now fetch the latest data
       $.getJSON ("http://localhost:8080/IMAEventsServer/UpcomingEvents/list/Sheffield?addedSince="+highest_timestamp_seen,
         function (data) {
           for (index = 0; index < data.events.length; ++index) {
+            tx.executeSql('INSERT INTO EVENT(name,event_date,address) VALUES ("'+
+                                      data.events[index].name+'","'+
+                                      data.events[index].eventDate+'","'+
+                                      data.events[index].address+'")');
+            alert("Added "+data.events[index]);
+
+            // Update our cursor if needed
+            if ( data.events[index].dateAdded > highest_timestamp_seen )
+              highest_timestamp_seen = data.events[index].dateAdded
           }
         }
       );
+
+      // Store the highest timestamp seen
+      window.localStorage.setItem("maxTS",highest_timestamp_seen);
     }
 };
