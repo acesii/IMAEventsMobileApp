@@ -17,9 +17,19 @@
  * under the License.
  */
 var app = {
+    // App DB Connection
+    db: null,
     // Application Constructor
     initialize: function() {
         this.bindEvents();
+        this.db = window.openDatabase("Database", "1.0", "PhoneGap Demo", 200000);
+        this.db.transaction(this.updateEventsData,
+                            function() {
+                              // Error Callback
+                            },
+                            function() {
+                              // Success Callback
+                            });
     },
     // Bind Event Listeners
     //
@@ -45,5 +55,19 @@ var app = {
         receivedElement.setAttribute('style', 'display:block;');
 
         console.log('Received Event: ' + id);
+    },
+    updateEventsData: function(tx) {
+      // Get or create our status table - this will record the highest timestamp we have seen so far
+      tx.executeSql('CREATE TABLE IF NOT EXISTS WS_FETCH_CURSOR ( id unique, highest_ts )');
+      // Get or create our events table - list of events
+      tx.executeSql('CREATE TABLE IF NOT EXISTS EVENT ( id unique, name, event_date, address )');
+
+      // Now fetch the latest data
+      $.getJSON ("http://localhost:8080/IMAEventsServer/UpcomingEvents/list/Sheffield?addedSince=0",
+        function (data) {
+          for (index = 0; index < data.events.length; ++index) {
+          }
+        }
+      );
     }
 };
